@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{RoomId, StatusInstance, UnitId};
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// Team allegiance for a unit.
 ///
@@ -13,7 +13,7 @@ pub enum Faction {
     Monster,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// Basic AI behavior for a unit.
 pub enum AiBehavior {
@@ -22,7 +22,7 @@ pub enum AiBehavior {
     Defensive,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// Immutable stat block for a unit instance.
 pub struct UnitStats {
@@ -34,7 +34,7 @@ pub struct UnitStats {
     pub attack_range: u32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// Fully instantiated unit with runtime state.
 ///

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::RoomId;
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// Defines a hero spawn entry in a wave.
 pub struct HeroSpawn {
@@ -13,7 +13,7 @@ pub struct HeroSpawn {
     pub delay_ticks: u32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// Configuration for a wave of invading heroes.
 ///
