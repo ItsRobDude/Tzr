@@ -3,9 +3,7 @@ pub mod pathfinding;
 pub mod tick;
 
 use crate::error::SimError;
-use crate::model::{
-    DungeonState, SimulationOutcome, SimulationResult, SimulationStats, WaveConfig,
-};
+use crate::model::{DungeonState, SimulationOutcome, SimulationResult, SimulationStats, WaveConfig};
 
 pub const MAX_UNITS: usize = 512;
 pub const MAX_TICKS: u32 = 60_000;
