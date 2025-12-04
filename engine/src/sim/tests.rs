@@ -5,6 +5,7 @@ use crate::model::{
     trap::TrapTriggerType, unit::UnitStats, wave::HeroSpawn,
 };
 use crate::sim::{simulate_wave, test_fixtures};
+use crate::sim::tick::{step_tick, SimState};
 use proptest::prelude::*;
 use std::collections::HashSet;
 
@@ -138,6 +139,78 @@ fn traps_apply_status_and_kill() {
     let result = simulate_wave(dungeon, wave, 3, 5).expect("simulation should succeed");
     assert_eq!(SimulationOutcome::DungeonWin, result.outcome);
     assert_eq!(1, result.stats.heroes_killed);
+}
+
+#[test]
+fn adjacent_rooms_allow_ranged_attacks() {
+    let core_room = basic_room(0);
+    let mut monster_room = basic_room(1);
+
+    let monster_stats = UnitStats {
+        max_hp: 10,
+        armor: 0,
+        move_speed: 0.0,
+        attack_damage: 5,
+        attack_interval_ticks: 1,
+        attack_range: 1,
+    };
+
+    monster_room
+        .monsters
+        .push(monster(0, monster_room.id, monster_stats, 10));
+
+    let dungeon = DungeonState {
+        rooms: vec![core_room.clone(), monster_room.clone()],
+        edges: vec![(core_room.id, monster_room.id)],
+        core_room_id: core_room.id,
+        core_hp: 100,
+    };
+
+    let wave = WaveConfig {
+        id: "adjacent-range".into(),
+        entries: vec![HeroSpawn {
+            hero_template_id: "archer".into(),
+            count: 1,
+            spawn_room_id: core_room.id,
+            delay_ticks: 0,
+        }],
+        modifiers: Vec::new(),
+    };
+
+    let mut state = SimState::new(dungeon, &wave, 7).expect("state should initialize");
+    step_tick(&mut state, &wave).expect("tick should succeed");
+
+    assert_eq!(15, state.heroes[0].hp, "hero should take ranged damage");
+    assert_eq!(5, state.dungeon.rooms[1].monsters[0].hp, "monster should be damaged at range");
+}
+
+#[test]
+fn heroes_can_attack_core_from_adjacent_room() {
+    let rooms = vec![basic_room(0), basic_room(1), basic_room(2)];
+
+    let dungeon = DungeonState {
+        rooms: rooms.clone(),
+        edges: vec![(rooms[0].id, rooms[1].id), (rooms[1].id, rooms[2].id)],
+        core_room_id: rooms[2].id,
+        core_hp: 15,
+    };
+
+    let wave = WaveConfig {
+        id: "adjacent-core".into(),
+        entries: vec![HeroSpawn {
+            hero_template_id: "ranger".into(),
+            count: 1,
+            spawn_room_id: rooms[0].id,
+            delay_ticks: 0,
+        }],
+        modifiers: Vec::new(),
+    };
+
+    let mut state = SimState::new(dungeon, &wave, 9).expect("state should initialize");
+    step_tick(&mut state, &wave).expect("tick should succeed");
+
+    assert_eq!(rooms[1].id, state.heroes[0].room_id, "hero should move toward the core");
+    assert_eq!(10, state.dungeon.core_hp, "core should take ranged damage from adjacent room");
 }
 
 #[test]

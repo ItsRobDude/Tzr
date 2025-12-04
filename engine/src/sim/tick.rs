@@ -239,11 +239,15 @@ fn process_attacks(state: &mut SimState) -> Result<(), SimError> {
             if is_stunned(monster) {
                 continue;
             }
-            if let Some(target) = state
-                .heroes
-                .iter_mut()
-                .find(|h| h.room_id == room.id && h.hp > 0)
-            {
+            if let Some(target) = state.heroes.iter_mut().find(|h| {
+                h.hp > 0
+                    && rooms_within_attack_range(
+                        room.id,
+                        h.room_id,
+                        monster.stats.attack_range,
+                        &state.dungeon.edges,
+                    )
+            }) {
                 let dmg = effective_damage(monster);
                 apply_damage(&mut state.events, state.tick, Some(monster.id), target, dmg)?;
                 monster.attack_cooldown = monster.stats.attack_interval_ticks;
@@ -264,17 +268,38 @@ fn process_attacks(state: &mut SimState) -> Result<(), SimError> {
             continue;
         }
 
-        if let Some(room) = state
+        if state
             .dungeon
             .rooms
-            .iter_mut()
-            .find(|r| r.id == hero.room_id)
+            .iter()
+            .any(|r| r.id == hero.room_id)
         {
-            if let Some(target) = room.monsters.iter_mut().find(|m| m.hp > 0) {
+            if let Some(target) = state
+                .dungeon
+                .rooms
+                .iter_mut()
+                .find_map(|target_room| {
+                    if !rooms_within_attack_range(
+                        hero.room_id,
+                        target_room.id,
+                        hero.stats.attack_range,
+                        &state.dungeon.edges,
+                    ) {
+                        return None;
+                    }
+
+                    target_room.monsters.iter_mut().find(|m| m.hp > 0)
+                })
+            {
                 let dmg = effective_damage(hero);
                 apply_damage(&mut state.events, state.tick, Some(hero.id), target, dmg)?;
                 hero.attack_cooldown = hero.stats.attack_interval_ticks;
-            } else if room.id == state.dungeon.core_room_id {
+            } else if rooms_within_attack_range(
+                hero.room_id,
+                state.dungeon.core_room_id,
+                hero.stats.attack_range,
+                &state.dungeon.edges,
+            ) {
                 let dmg = effective_damage(hero);
                 state.dungeon.core_hp -= dmg;
                 state.stats.total_damage_to_core += dmg;
@@ -292,6 +317,17 @@ fn process_attacks(state: &mut SimState) -> Result<(), SimError> {
     }
 
     Ok(())
+}
+
+fn rooms_within_attack_range(
+    origin: RoomId,
+    target: RoomId,
+    range: u32,
+    edges: &[(RoomId, RoomId)],
+) -> bool {
+    range as usize >= shortest_path(origin, target, edges)
+        .map(|path| path.len().saturating_sub(1))
+        .unwrap_or(usize::MAX)
 }
 
 fn cleanup_dead(state: &mut SimState) {

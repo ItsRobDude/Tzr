@@ -54,7 +54,7 @@
     }
   ],
   "stats": {
-    "ticks_run": 6,
+    "ticks_run": 5,
     "heroes_spawned": 1,
     "heroes_killed": 0,
     "monsters_killed": 0,
@@ -77,6 +77,13 @@
       }
     },
     {
+      "CoreDamaged": {
+        "tick": 0,
+        "amount": 5,
+        "core_hp_after": 10
+      }
+    },
+    {
       "UnitMoved": {
         "tick": 1,
         "unit_id": 0,
@@ -86,21 +93,14 @@
     },
     {
       "CoreDamaged": {
-        "tick": 1,
-        "amount": 5,
-        "core_hp_after": 10
-      }
-    },
-    {
-      "CoreDamaged": {
-        "tick": 3,
+        "tick": 2,
         "amount": 5,
         "core_hp_after": 5
       }
     },
     {
       "CoreDamaged": {
-        "tick": 5,
+        "tick": 4,
         "amount": 5,
         "core_hp_after": 0
       }
