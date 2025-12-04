@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub mod dungeon;
@@ -12,13 +13,16 @@ pub use trap::{TrapInstance, TrapTriggerType};
 pub use unit::{AiBehavior, Faction, UnitId, UnitInstance, UnitStats};
 pub use wave::{HeroSpawn, WaveConfig};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
 pub struct RoomId(pub u32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
 pub struct UnitId(pub u32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
 pub struct TrapId(pub u32);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
