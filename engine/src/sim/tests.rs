@@ -140,6 +140,64 @@ fn traps_apply_status_and_kill() {
     assert_eq!(1, result.stats.heroes_killed);
 }
 
+#[test]
+fn traps_recover_cooldown_without_additional_entries() {
+    let mut room0 = basic_room(0);
+    room0.traps.push(TrapInstance {
+        id: TrapId(0),
+        trigger_type: TrapTriggerType::OnEnter,
+        cooldown_ticks: 2,
+        cooldown_remaining: 0,
+        max_charges: None,
+        charges_used: 0,
+        damage: 50,
+        status_on_hit: None,
+        tags: Vec::new(),
+    });
+    let room1 = basic_room(1);
+
+    let dungeon = DungeonState {
+        rooms: vec![room0.clone(), room1.clone()],
+        edges: vec![(room0.id, room1.id)],
+        core_room_id: room1.id,
+        core_hp: 100,
+    };
+
+    let wave = WaveConfig {
+        id: "wave-cooldowns".into(),
+        entries: vec![
+            HeroSpawn {
+                hero_template_id: "h1".into(),
+                count: 1,
+                spawn_room_id: room0.id,
+                delay_ticks: 0,
+            },
+            HeroSpawn {
+                hero_template_id: "h2".into(),
+                count: 1,
+                spawn_room_id: room0.id,
+                delay_ticks: 3,
+            },
+        ],
+        modifiers: Vec::new(),
+    };
+
+    let result = simulate_wave(dungeon, wave, 4, 10).expect("simulation should succeed");
+
+    assert_eq!(2, result.stats.heroes_spawned);
+    assert_eq!(2, result.stats.heroes_killed);
+
+    let trap = result
+        .final_dungeon
+        .rooms
+        .iter()
+        .find(|room| room.id == room0.id)
+        .and_then(|room| room.traps.first())
+        .expect("trap should remain in dungeon");
+
+    assert_eq!(2, trap.charges_used);
+}
+
 fn unit_stats_strategy() -> impl Strategy<Value = UnitStats> {
     (
         5..=50i32,
@@ -184,71 +242,68 @@ fn monster_group_strategy() -> impl Strategy<Value = Vec<UnitInstance>> {
 
 fn dungeon_and_wave_strategy() -> impl Strategy<Value = (DungeonState, WaveConfig, u64)> {
     const MAX_ROOMS: usize = 4;
-    prop::collection::vec(monster_group_strategy(), 1..=MAX_ROOMS).prop_flat_map(
-        |mut monster_groups| {
-            let room_count = monster_groups.len();
-            let entries_strategy =
-                prop::collection::vec((1..=3u32, 0..room_count, 0..=10u32), 1..=3);
-            (
-                Just(monster_groups),
-                0..room_count,
-                25..=250i32,
-                entries_strategy,
-                any::<u64>(),
-            )
-                .prop_map(|(mut monster_groups, core_idx, core_hp, entries, seed)| {
-                    let mut next_id = 0u32;
-                    let rooms: Vec<RoomState> = monster_groups
-                        .iter_mut()
-                        .enumerate()
-                        .map(|(room_idx, monsters)| {
-                            let room_id = RoomId(room_idx as u32);
-                            for monster in monsters.iter_mut() {
-                                monster.room_id = room_id;
-                                monster.id = UnitId(next_id);
-                                next_id += 1;
-                            }
-                            RoomState {
-                                id: room_id,
-                                traps: Vec::new(),
-                                monsters: monsters.clone(),
-                                tags: Vec::new(),
-                            }
-                        })
-                        .collect();
+    prop::collection::vec(monster_group_strategy(), 1..=MAX_ROOMS).prop_flat_map(|monster_groups| {
+        let room_count = monster_groups.len();
+        let entries_strategy = prop::collection::vec((1..=3u32, 0..room_count, 0..=10u32), 1..=3);
+        (
+            Just(monster_groups),
+            0..room_count,
+            25..=250i32,
+            entries_strategy,
+            any::<u64>(),
+        )
+            .prop_map(|(mut monster_groups, core_idx, core_hp, entries, seed)| {
+                let mut next_id = 0u32;
+                let rooms: Vec<RoomState> = monster_groups
+                    .iter_mut()
+                    .enumerate()
+                    .map(|(room_idx, monsters)| {
+                        let room_id = RoomId(room_idx as u32);
+                        for monster in monsters.iter_mut() {
+                            monster.room_id = room_id;
+                            monster.id = UnitId(next_id);
+                            next_id += 1;
+                        }
+                        RoomState {
+                            id: room_id,
+                            traps: Vec::new(),
+                            monsters: monsters.clone(),
+                            tags: Vec::new(),
+                        }
+                    })
+                    .collect();
 
-                    let edges = (0..rooms.len().saturating_sub(1))
-                        .map(|idx| (RoomId(idx as u32), RoomId(idx as u32 + 1)))
-                        .collect();
+                let edges = (0..rooms.len().saturating_sub(1))
+                    .map(|idx| (RoomId(idx as u32), RoomId(idx as u32 + 1)))
+                    .collect();
 
-                    let dungeon = DungeonState {
-                        rooms: rooms.clone(),
-                        edges,
-                        core_room_id: RoomId(core_idx as u32),
-                        core_hp,
-                    };
+                let dungeon = DungeonState {
+                    rooms: rooms.clone(),
+                    edges,
+                    core_room_id: RoomId(core_idx as u32),
+                    core_hp,
+                };
 
-                    let wave_entries = entries
-                        .into_iter()
-                        .enumerate()
-                        .map(|(idx, (count, room_idx, delay_ticks))| HeroSpawn {
-                            hero_template_id: format!("hero-{idx}"),
-                            count,
-                            spawn_room_id: RoomId(room_idx as u32),
-                            delay_ticks,
-                        })
-                        .collect();
+                let wave_entries = entries
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, (count, room_idx, delay_ticks))| HeroSpawn {
+                        hero_template_id: format!("hero-{idx}"),
+                        count,
+                        spawn_room_id: RoomId(room_idx as u32),
+                        delay_ticks,
+                    })
+                    .collect();
 
-                    let wave = WaveConfig {
-                        id: "wave-proptest".into(),
-                        entries: wave_entries,
-                        modifiers: Vec::new(),
-                    };
+                let wave = WaveConfig {
+                    id: "wave-proptest".into(),
+                    entries: wave_entries,
+                    modifiers: Vec::new(),
+                };
 
-                    (dungeon, wave, seed)
-                })
-        },
-    )
+                (dungeon, wave, seed)
+            })
+    })
 }
 
 proptest! {

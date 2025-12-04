@@ -1,7 +1,7 @@
 pub mod events;
 pub mod pathfinding;
-pub mod tick;
 pub mod test_fixtures;
+pub mod tick;
 
 use crate::error::SimError;
 use crate::model::{DungeonState, SimulationOutcome, SimulationResult, WaveConfig};
