@@ -4,7 +4,7 @@ use crate::model::{
     WaveConfig, dungeon::RoomState, status::StatusInstance, trap::TrapInstance,
     trap::TrapTriggerType, unit::UnitStats, wave::HeroSpawn,
 };
-use crate::sim::simulate_wave;
+use crate::sim::{simulate_wave, test_fixtures};
 use proptest::prelude::*;
 use std::collections::HashSet;
 
@@ -289,4 +289,27 @@ proptest! {
 
         prop_assert!(result.stats.ticks_run <= 250);
     }
+}
+
+fn assert_snapshot(fixture: &test_fixtures::ScenarioFixture) {
+    let expected = fixture.expected_result();
+    let actual = fixture
+        .run()
+        .unwrap_or_else(|err| panic!("{} scenario failed: {err}", fixture.name));
+    assert_eq!(expected, actual, "{} scenario drifted", fixture.name);
+}
+
+#[test]
+fn movement_snapshot_is_stable() {
+    assert_snapshot(&test_fixtures::movement_to_core());
+}
+
+#[test]
+fn traps_snapshot_is_stable() {
+    assert_snapshot(&test_fixtures::trapped_entry_hall());
+}
+
+#[test]
+fn combat_snapshot_is_stable() {
+    assert_snapshot(&test_fixtures::core_room_duel());
 }

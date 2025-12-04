@@ -1,5 +1,4 @@
-use rand::Rng;
-use rand::SeedableRng;
+use rand::{Rng as RandTrait, SeedableRng};
 use rand_pcg::Pcg64Mcg;
 
 pub struct Rng {
@@ -14,13 +13,13 @@ impl Rng {
     }
 
     pub fn gen_range(&mut self, range: std::ops::Range<u32>) -> u32 {
-        self.inner.gen_range(range)
+        RandTrait::gen_range(&mut self.inner, range)
     }
 
     pub fn choose_index<T>(&mut self, slice: &[T]) -> Option<usize> {
         if slice.is_empty() {
             return None;
         }
-        Some(self.inner.gen_range(0..slice.len()))
+        Some(RandTrait::gen_range(&mut self.inner, 0..slice.len()))
     }
 }

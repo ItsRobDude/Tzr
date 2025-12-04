@@ -1,0 +1,97 @@
+{
+  "outcome": "DungeonWin",
+  "final_dungeon": {
+    "rooms": [
+      {
+        "id": 1,
+        "traps": [],
+        "monsters": [
+          {
+            "id": 0,
+            "faction": "monster",
+            "stats": {
+              "max_hp": 25,
+              "armor": 1,
+              "move_speed": 0.0,
+              "attack_damage": 7,
+              "attack_interval_ticks": 1,
+              "attack_range": 1
+            },
+            "hp": 17,
+            "room_id": 1,
+            "status_effects": [],
+            "ai_behavior": "aggressive",
+            "attack_cooldown": 1
+          }
+        ],
+        "tags": []
+      }
+    ],
+    "edges": [],
+    "core_room_id": 1,
+    "core_hp": 40
+  },
+  "final_heroes": [],
+  "stats": {
+    "ticks_run": 5,
+    "heroes_spawned": 1,
+    "heroes_killed": 1,
+    "monsters_killed": 0,
+    "total_damage_to_core": 0
+  },
+  "events": [
+    {
+      "UnitSpawned": {
+        "tick": 0,
+        "unit_id": 0,
+        "room_id": 1
+      }
+    },
+    {
+      "DamageApplied": {
+        "tick": 0,
+        "source": 0,
+        "target": 0,
+        "amount": 7
+      }
+    },
+    {
+      "DamageApplied": {
+        "tick": 0,
+        "source": 0,
+        "target": 0,
+        "amount": 4
+      }
+    },
+    {
+      "DamageApplied": {
+        "tick": 2,
+        "source": 0,
+        "target": 0,
+        "amount": 7
+      }
+    },
+    {
+      "DamageApplied": {
+        "tick": 2,
+        "source": 0,
+        "target": 0,
+        "amount": 4
+      }
+    },
+    {
+      "DamageApplied": {
+        "tick": 4,
+        "source": 0,
+        "target": 0,
+        "amount": 7
+      }
+    },
+    {
+      "UnitDied": {
+        "tick": 4,
+        "unit_id": 0
+      }
+    }
+  ]
+}

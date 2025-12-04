@@ -10,7 +10,7 @@ pub mod wave;
 pub use dungeon::{DungeonState, RoomState};
 pub use status::{StatusInstance, StatusKind};
 pub use trap::{TrapInstance, TrapTriggerType};
-pub use unit::{AiBehavior, Faction, UnitId, UnitInstance, UnitStats};
+pub use unit::{AiBehavior, Faction, UnitInstance, UnitStats};
 pub use wave::{HeroSpawn, WaveConfig};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]

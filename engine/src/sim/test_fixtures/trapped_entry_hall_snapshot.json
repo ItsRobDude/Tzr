@@ -1,0 +1,119 @@
+{
+  "outcome": "DungeonWin",
+  "final_dungeon": {
+    "rooms": [
+      {
+        "id": 0,
+        "traps": [
+          {
+            "id": 0,
+            "trigger_type": "on_enter",
+            "cooldown_ticks": 0,
+            "cooldown_remaining": 0,
+            "max_charges": 1,
+            "charges_used": 1,
+            "damage": 12,
+            "status_on_hit": {
+              "kind": "poison",
+              "remaining_ticks": 2,
+              "magnitude": 6.0
+            },
+            "tags": []
+          }
+        ],
+        "monsters": [],
+        "tags": []
+      },
+      {
+        "id": 1,
+        "traps": [],
+        "monsters": [],
+        "tags": []
+      }
+    ],
+    "edges": [
+      [
+        0,
+        1
+      ]
+    ],
+    "core_room_id": 1,
+    "core_hp": 45
+  },
+  "final_heroes": [],
+  "stats": {
+    "ticks_run": 2,
+    "heroes_spawned": 1,
+    "heroes_killed": 1,
+    "monsters_killed": 0,
+    "total_damage_to_core": 5
+  },
+  "events": [
+    {
+      "UnitSpawned": {
+        "tick": 0,
+        "unit_id": 0,
+        "room_id": 0
+      }
+    },
+    {
+      "TrapTriggered": {
+        "tick": 0,
+        "trap_id": 0,
+        "room_id": 0
+      }
+    },
+    {
+      "DamageApplied": {
+        "tick": 0,
+        "source": null,
+        "target": 0,
+        "amount": 12
+      }
+    },
+    {
+      "StatusApplied": {
+        "tick": 0,
+        "target": 0,
+        "kind": "poison"
+      }
+    },
+    {
+      "DamageApplied": {
+        "tick": 0,
+        "source": null,
+        "target": 0,
+        "amount": 6
+      }
+    },
+    {
+      "UnitMoved": {
+        "tick": 0,
+        "unit_id": 0,
+        "from": 0,
+        "to": 1
+      }
+    },
+    {
+      "CoreDamaged": {
+        "tick": 0,
+        "amount": 5,
+        "core_hp_after": 45
+      }
+    },
+    {
+      "DamageApplied": {
+        "tick": 1,
+        "source": null,
+        "target": 0,
+        "amount": 6
+      }
+    },
+    {
+      "UnitDied": {
+        "tick": 1,
+        "unit_id": 0
+      }
+    }
+  ]
+}
