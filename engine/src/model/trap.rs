@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{StatusInstance, TrapId};
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// The condition under which a trap triggers.
 pub enum TrapTriggerType {
@@ -12,7 +12,7 @@ pub enum TrapTriggerType {
     Timed,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// A placed trap instance with runtime state.
 ///

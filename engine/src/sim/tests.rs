@@ -5,6 +5,8 @@ use crate::model::{
     trap::TrapTriggerType, unit::UnitStats, wave::HeroSpawn,
 };
 use crate::sim::simulate_wave;
+use proptest::prelude::*;
+use std::collections::HashSet;
 
 fn basic_room(id: u32) -> RoomState {
     RoomState {
@@ -136,4 +138,155 @@ fn traps_apply_status_and_kill() {
     let result = simulate_wave(dungeon, wave, 3, 5).expect("simulation should succeed");
     assert_eq!(SimulationOutcome::DungeonWin, result.outcome);
     assert_eq!(1, result.stats.heroes_killed);
+}
+
+fn unit_stats_strategy() -> impl Strategy<Value = UnitStats> {
+    (
+        5..=50i32,
+        0..=10i32,
+        0.5f32..=2.5,
+        5..=25i32,
+        1..=5u32,
+        1..=3u32,
+    )
+        .prop_map(
+            |(max_hp, armor, move_speed, attack_damage, attack_interval_ticks, attack_range)| {
+                UnitStats {
+                    max_hp,
+                    armor,
+                    move_speed,
+                    attack_damage,
+                    attack_interval_ticks,
+                    attack_range,
+                }
+            },
+        )
+}
+
+fn monster_group_strategy() -> impl Strategy<Value = Vec<UnitInstance>> {
+    prop::collection::vec((unit_stats_strategy(), 1..=50i32), 0..=3).prop_map(|monsters| {
+        monsters
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (stats, hp_guess))| UnitInstance {
+                id: UnitId(idx as u32),
+                faction: Faction::Monster,
+                stats: stats.clone(),
+                hp: hp_guess.clamp(1, stats.max_hp.max(1)),
+                room_id: RoomId(0),
+                status_effects: Vec::new(),
+                ai_behavior: AiBehavior::Aggressive,
+                attack_cooldown: 0,
+            })
+            .collect()
+    })
+}
+
+fn dungeon_and_wave_strategy() -> impl Strategy<Value = (DungeonState, WaveConfig, u64)> {
+    const MAX_ROOMS: usize = 4;
+    prop::collection::vec(monster_group_strategy(), 1..=MAX_ROOMS).prop_flat_map(
+        |mut monster_groups| {
+            let room_count = monster_groups.len();
+            let entries_strategy =
+                prop::collection::vec((1..=3u32, 0..room_count, 0..=10u32), 1..=3);
+            (
+                Just(monster_groups),
+                0..room_count,
+                25..=250i32,
+                entries_strategy,
+                any::<u64>(),
+            )
+                .prop_map(|(mut monster_groups, core_idx, core_hp, entries, seed)| {
+                    let mut next_id = 0u32;
+                    let rooms: Vec<RoomState> = monster_groups
+                        .iter_mut()
+                        .enumerate()
+                        .map(|(room_idx, monsters)| {
+                            let room_id = RoomId(room_idx as u32);
+                            for monster in monsters.iter_mut() {
+                                monster.room_id = room_id;
+                                monster.id = UnitId(next_id);
+                                next_id += 1;
+                            }
+                            RoomState {
+                                id: room_id,
+                                traps: Vec::new(),
+                                monsters: monsters.clone(),
+                                tags: Vec::new(),
+                            }
+                        })
+                        .collect();
+
+                    let edges = (0..rooms.len().saturating_sub(1))
+                        .map(|idx| (RoomId(idx as u32), RoomId(idx as u32 + 1)))
+                        .collect();
+
+                    let dungeon = DungeonState {
+                        rooms: rooms.clone(),
+                        edges,
+                        core_room_id: RoomId(core_idx as u32),
+                        core_hp,
+                    };
+
+                    let wave_entries = entries
+                        .into_iter()
+                        .enumerate()
+                        .map(|(idx, (count, room_idx, delay_ticks))| HeroSpawn {
+                            hero_template_id: format!("hero-{idx}"),
+                            count,
+                            spawn_room_id: RoomId(room_idx as u32),
+                            delay_ticks,
+                        })
+                        .collect();
+
+                    let wave = WaveConfig {
+                        id: "wave-proptest".into(),
+                        entries: wave_entries,
+                        modifiers: Vec::new(),
+                    };
+
+                    (dungeon, wave, seed)
+                })
+        },
+    )
+}
+
+proptest! {
+    #[test]
+    fn simulation_is_deterministic((dungeon, wave, seed) in dungeon_and_wave_strategy()) {
+        let first = simulate_wave(dungeon.clone(), wave.clone(), seed, 250)
+            .expect("first simulation should succeed");
+        let second = simulate_wave(dungeon, wave, seed, 250)
+            .expect("second simulation should succeed");
+
+        prop_assert_eq!(first, second);
+    }
+}
+
+proptest! {
+    #[test]
+    fn simulation_preserves_basic_invariants((dungeon, wave, seed) in dungeon_and_wave_strategy()) {
+        let result = simulate_wave(dungeon, wave, seed, 250)
+            .expect("simulation should succeed");
+
+        prop_assert!(!result.final_dungeon.rooms.is_empty());
+        let room_ids: HashSet<RoomId> = result.final_dungeon.rooms.iter().map(|r| r.id).collect();
+
+        for hero in &result.final_heroes {
+            prop_assert!(hero.hp >= 0);
+            prop_assert!(hero.hp <= hero.stats.max_hp);
+            prop_assert!(room_ids.contains(&hero.room_id));
+        }
+
+        for room in &result.final_dungeon.rooms {
+            prop_assert!(room_ids.contains(&room.id));
+            for monster in &room.monsters {
+                prop_assert!(monster.hp >= 0);
+                prop_assert!(monster.hp <= monster.stats.max_hp);
+                prop_assert_eq!(monster.room_id, room.id);
+            }
+        }
+
+        prop_assert!(result.stats.ticks_run <= 250);
+    }
 }

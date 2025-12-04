@@ -25,14 +25,14 @@ pub struct UnitId(pub u32);
 #[serde(transparent)]
 pub struct TrapId(pub u32);
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SimulationOutcome {
     DungeonWin,
     HeroesWin,
     Timeout,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SimulationStats {
     pub ticks_run: u32,
     pub heroes_spawned: u32,
@@ -41,7 +41,7 @@ pub struct SimulationStats {
     pub total_damage_to_core: i32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SimulationResult {
     pub outcome: SimulationOutcome,
     pub final_dungeon: DungeonState,

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::{RoomId, StatusKind, TrapId, UnitId};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SimulationEvent {
     UnitSpawned {
         tick: u32,

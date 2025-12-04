@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{RoomId, TrapInstance, UnitInstance};
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// State for an individual room, including its occupants and tags.
 ///
@@ -23,7 +23,7 @@ pub struct RoomState {
     pub tags: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 /// Top-level dungeon description used for simulations.
 ///
