@@ -2,8 +2,8 @@ use crate::error::SimError;
 use crate::model::SimulationOutcome;
 use crate::model::SimulationStats;
 use crate::model::{
-    AiBehavior, DungeonState, Faction, RoomId, StatusKind, TrapTriggerType, UnitId, UnitInstance,
-    UnitStats, WaveConfig,
+    AiBehavior, DungeonState, Faction, HeroSpawn, RoomId, StatusKind, TrapTriggerType, UnitId,
+    UnitInstance, UnitStats, WaveConfig,
 };
 use crate::rng::Rng;
 use crate::sim::events::SimulationEvent;
@@ -101,7 +101,7 @@ fn spawn_heroes(state: &mut SimState, wave: &WaveConfig) -> Result<(), SimError>
                 return Err(SimError::EntityLimit);
             }
 
-            let stats = default_hero_stats();
+            let stats = hero_stats_for_spawn(spawn, wave);
             let unit = UnitInstance {
                 id: UnitId(state.next_unit_id),
                 faction: Faction::Hero,
@@ -268,29 +268,19 @@ fn process_attacks(state: &mut SimState) -> Result<(), SimError> {
             continue;
         }
 
-        if state
-            .dungeon
-            .rooms
-            .iter()
-            .any(|r| r.id == hero.room_id)
-        {
-            if let Some(target) = state
-                .dungeon
-                .rooms
-                .iter_mut()
-                .find_map(|target_room| {
-                    if !rooms_within_attack_range(
-                        hero.room_id,
-                        target_room.id,
-                        hero.stats.attack_range,
-                        &state.dungeon.edges,
-                    ) {
-                        return None;
-                    }
+        if state.dungeon.rooms.iter().any(|r| r.id == hero.room_id) {
+            if let Some(target) = state.dungeon.rooms.iter_mut().find_map(|target_room| {
+                if !rooms_within_attack_range(
+                    hero.room_id,
+                    target_room.id,
+                    hero.stats.attack_range,
+                    &state.dungeon.edges,
+                ) {
+                    return None;
+                }
 
-                    target_room.monsters.iter_mut().find(|m| m.hp > 0)
-                })
-            {
+                target_room.monsters.iter_mut().find(|m| m.hp > 0)
+            }) {
                 let dmg = effective_damage(hero);
                 apply_damage(&mut state.events, state.tick, Some(hero.id), target, dmg)?;
                 hero.attack_cooldown = hero.stats.attack_interval_ticks;
@@ -325,9 +315,10 @@ fn rooms_within_attack_range(
     range: u32,
     edges: &[(RoomId, RoomId)],
 ) -> bool {
-    range as usize >= shortest_path(origin, target, edges)
-        .map(|path| path.len().saturating_sub(1))
-        .unwrap_or(usize::MAX)
+    range as usize
+        >= shortest_path(origin, target, edges)
+            .map(|path| path.len().saturating_sub(1))
+            .unwrap_or(usize::MAX)
 }
 
 fn cleanup_dead(state: &mut SimState) {
@@ -496,4 +487,57 @@ fn default_hero_stats() -> UnitStats {
         attack_interval_ticks: 1,
         attack_range: 1,
     }
+}
+
+fn hero_stats_for_spawn(spawn: &HeroSpawn, wave: &WaveConfig) -> UnitStats {
+    let base = hero_template_stats(&spawn.hero_template_id).unwrap_or_else(default_hero_stats);
+    apply_wave_modifiers(base, &wave.modifiers)
+}
+
+fn hero_template_stats(template_id: &str) -> Option<UnitStats> {
+    match template_id {
+        "h1" | "scout" | "thief" | "champion" => Some(default_hero_stats()),
+        "h2" => Some(UnitStats {
+            max_hp: 24,
+            armor: 1,
+            move_speed: 0.9,
+            attack_damage: 6,
+            attack_interval_ticks: 1,
+            attack_range: 1,
+        }),
+        "archer" => Some(UnitStats {
+            max_hp: 20,
+            armor: 0,
+            move_speed: 1.0,
+            attack_damage: 5,
+            attack_interval_ticks: 1,
+            attack_range: 2,
+        }),
+        "ranger" => Some(UnitStats {
+            max_hp: 20,
+            armor: 0,
+            move_speed: 1.0,
+            attack_damage: 5,
+            attack_interval_ticks: 1,
+            attack_range: 2,
+        }),
+        _ => None,
+    }
+}
+
+fn apply_wave_modifiers(mut stats: UnitStats, modifiers: &[String]) -> UnitStats {
+    for modifier in modifiers {
+        match modifier.as_str() {
+            "enraged" => {
+                stats.attack_damage += 2;
+            }
+            "reinforced" => {
+                stats.max_hp += 5;
+                stats.armor += 1;
+            }
+            _ => {}
+        }
+    }
+
+    stats
 }

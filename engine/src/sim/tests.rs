@@ -4,8 +4,8 @@ use crate::model::{
     WaveConfig, dungeon::RoomState, status::StatusInstance, trap::TrapInstance,
     trap::TrapTriggerType, unit::UnitStats, wave::HeroSpawn,
 };
+use crate::sim::tick::{SimState, step_tick};
 use crate::sim::{simulate_wave, test_fixtures};
-use crate::sim::tick::{step_tick, SimState};
 use proptest::prelude::*;
 use std::collections::HashSet;
 
@@ -99,6 +99,105 @@ fn monsters_can_defend_core() {
 }
 
 #[test]
+fn heroes_use_template_stats_when_spawning() {
+    let room0 = basic_room(0);
+    let room1 = basic_room(1);
+
+    let dungeon = DungeonState {
+        rooms: vec![room0.clone(), room1.clone()],
+        edges: vec![(room0.id, room1.id)],
+        core_room_id: room1.id,
+        core_hp: 25,
+    };
+
+    let wave = WaveConfig {
+        id: "wave-templates".into(),
+        entries: vec![
+            HeroSpawn {
+                hero_template_id: "h1".into(),
+                count: 1,
+                spawn_room_id: room0.id,
+                delay_ticks: 0,
+            },
+            HeroSpawn {
+                hero_template_id: "h2".into(),
+                count: 1,
+                spawn_room_id: room0.id,
+                delay_ticks: 0,
+            },
+        ],
+        modifiers: Vec::new(),
+    };
+
+    let mut state = SimState::new(dungeon, &wave, 3).expect("state should initialize");
+    step_tick(&mut state, &wave).expect("tick should succeed");
+
+    assert_eq!(2, state.heroes.len());
+
+    let h1_stats = UnitStats {
+        max_hp: 20,
+        armor: 0,
+        move_speed: 1.0,
+        attack_damage: 5,
+        attack_interval_ticks: 1,
+        attack_range: 1,
+    };
+    let h2_stats = UnitStats {
+        max_hp: 24,
+        armor: 1,
+        move_speed: 0.9,
+        attack_damage: 6,
+        attack_interval_ticks: 1,
+        attack_range: 1,
+    };
+
+    assert_eq!(
+        h1_stats, state.heroes[0].stats,
+        "h1 should use its template stats"
+    );
+    assert_eq!(
+        h2_stats, state.heroes[1].stats,
+        "h2 should use its template stats"
+    );
+}
+
+#[test]
+fn wave_modifiers_are_applied_to_heroes() {
+    let room0 = basic_room(0);
+    let room1 = basic_room(1);
+
+    let dungeon = DungeonState {
+        rooms: vec![room0.clone(), room1.clone()],
+        edges: vec![(room0.id, room1.id)],
+        core_room_id: room1.id,
+        core_hp: 30,
+    };
+
+    let wave = WaveConfig {
+        id: "wave-modifiers".into(),
+        entries: vec![HeroSpawn {
+            hero_template_id: "h1".into(),
+            count: 1,
+            spawn_room_id: room0.id,
+            delay_ticks: 0,
+        }],
+        modifiers: vec!["enraged".into(), "reinforced".into()],
+    };
+
+    let mut state = SimState::new(dungeon, &wave, 7).expect("state should initialize");
+    step_tick(&mut state, &wave).expect("tick should succeed");
+
+    let hero = state.heroes.first().expect("hero should spawn");
+
+    assert_eq!(25, hero.stats.max_hp, "reinforced should increase max hp");
+    assert_eq!(1, hero.stats.armor, "reinforced should increase armor");
+    assert_eq!(
+        7, hero.stats.attack_damage,
+        "enraged should increase attack damage"
+    );
+}
+
+#[test]
 fn traps_apply_status_and_kill() {
     let mut room0 = basic_room(0);
     room0.traps.push(TrapInstance {
@@ -181,7 +280,10 @@ fn adjacent_rooms_allow_ranged_attacks() {
     step_tick(&mut state, &wave).expect("tick should succeed");
 
     assert_eq!(15, state.heroes[0].hp, "hero should take ranged damage");
-    assert_eq!(5, state.dungeon.rooms[1].monsters[0].hp, "monster should be damaged at range");
+    assert_eq!(
+        5, state.dungeon.rooms[1].monsters[0].hp,
+        "monster should be damaged at range"
+    );
 }
 
 #[test]
@@ -209,8 +311,14 @@ fn heroes_can_attack_core_from_adjacent_room() {
     let mut state = SimState::new(dungeon, &wave, 9).expect("state should initialize");
     step_tick(&mut state, &wave).expect("tick should succeed");
 
-    assert_eq!(rooms[1].id, state.heroes[0].room_id, "hero should move toward the core");
-    assert_eq!(10, state.dungeon.core_hp, "core should take ranged damage from adjacent room");
+    assert_eq!(
+        rooms[1].id, state.heroes[0].room_id,
+        "hero should move toward the core"
+    );
+    assert_eq!(
+        10, state.dungeon.core_hp,
+        "core should take ranged damage from adjacent room"
+    );
 }
 
 #[test]
