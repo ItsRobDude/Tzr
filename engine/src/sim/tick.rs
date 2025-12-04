@@ -50,7 +50,6 @@ impl SimState {
         let monsters: usize = self.dungeon.rooms.iter().map(|r| r.monsters.len()).sum();
         monsters + self.heroes.len()
     }
-
 }
 
 fn push_event(events: &mut Vec<SimulationEvent>, event: SimulationEvent) -> Result<(), SimError> {
@@ -72,6 +71,8 @@ pub fn step_tick(
     spawn_heroes(state, wave)?;
 
     apply_status_effects(state)?;
+
+    tick_trap_cooldowns(state);
 
     move_heroes(state)?;
 
@@ -141,6 +142,14 @@ fn apply_status_effects(state: &mut SimState) -> Result<(), SimError> {
         }
     }
     Ok(())
+}
+
+fn tick_trap_cooldowns(state: &mut SimState) {
+    for room in state.dungeon.rooms.iter_mut() {
+        for trap in room.traps.iter_mut() {
+            trap.cooldown_remaining = trap.cooldown_remaining.saturating_sub(1);
+        }
+    }
 }
 
 fn tick_statuses(
@@ -347,7 +356,6 @@ fn trigger_traps(
                 continue;
             }
             if trap.cooldown_remaining > 0 {
-                trap.cooldown_remaining -= 1;
                 continue;
             }
             if let Some(max_charges) = trap.max_charges {
