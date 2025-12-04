@@ -51,13 +51,14 @@ impl SimState {
         monsters + self.heroes.len()
     }
 
-    pub fn add_event(&mut self, event: SimulationEvent) -> Result<(), SimError> {
-        if self.events.len() >= MAX_EVENTS {
-            return Err(SimError::EntityLimit);
-        }
-        self.events.push(event);
-        Ok(())
+}
+
+fn push_event(events: &mut Vec<SimulationEvent>, event: SimulationEvent) -> Result<(), SimError> {
+    if events.len() >= MAX_EVENTS {
+        return Err(SimError::EntityLimit);
     }
+    events.push(event);
+    Ok(())
 }
 
 pub fn step_tick(
@@ -112,13 +113,18 @@ fn spawn_heroes(state: &mut SimState, wave: &WaveConfig) -> Result<(), SimError>
             };
             state.next_unit_id += 1;
             state.stats.heroes_spawned += 1;
-            state.add_event(SimulationEvent::UnitSpawned {
-                tick: state.tick,
-                unit_id: unit.id,
-                room_id: unit.room_id,
-            })?;
-            trigger_traps(state, unit.room_id, TrapTriggerType::OnEnter, Some(unit.id))?;
+            let unit_id = unit.id;
+            let room_id = unit.room_id;
             state.heroes.push(unit);
+            push_event(
+                &mut state.events,
+                SimulationEvent::UnitSpawned {
+                    tick: state.tick,
+                    unit_id,
+                    room_id,
+                },
+            )?;
+            trigger_traps(state, room_id, TrapTriggerType::OnEnter, Some(unit_id))?;
             state.spawn_progress[idx] += 1;
         }
     }
@@ -127,17 +133,21 @@ fn spawn_heroes(state: &mut SimState, wave: &WaveConfig) -> Result<(), SimError>
 
 fn apply_status_effects(state: &mut SimState) -> Result<(), SimError> {
     for hero in state.heroes.iter_mut() {
-        tick_statuses(state, hero)?;
+        tick_statuses(&mut state.events, state.tick, hero)?;
     }
     for room in state.dungeon.rooms.iter_mut() {
         for monster in room.monsters.iter_mut() {
-            tick_statuses(state, monster)?;
+            tick_statuses(&mut state.events, state.tick, monster)?;
         }
     }
     Ok(())
 }
 
-fn tick_statuses(state: &mut SimState, unit: &mut UnitInstance) -> Result<(), SimError> {
+fn tick_statuses(
+    events: &mut Vec<SimulationEvent>,
+    tick: u32,
+    unit: &mut UnitInstance,
+) -> Result<(), SimError> {
     let mut damage = 0;
     for status in unit.status_effects.iter_mut() {
         if matches!(status.kind, StatusKind::Poison | StatusKind::Burn) {
@@ -149,12 +159,13 @@ fn tick_statuses(state: &mut SimState, unit: &mut UnitInstance) -> Result<(), Si
     }
     unit.status_effects.retain(|s| s.remaining_ticks > 0);
     if damage > 0 {
-        apply_damage(state, None, unit, damage)?;
+        apply_damage(events, tick, None, unit, damage)?;
     }
     Ok(())
 }
 
 fn move_heroes(state: &mut SimState) -> Result<(), SimError> {
+    let mut movements = Vec::new();
     for hero in state.heroes.iter_mut() {
         if hero.hp <= 0 {
             continue;
@@ -186,14 +197,21 @@ fn move_heroes(state: &mut SimState) -> Result<(), SimError> {
         let new_room = path[steps];
         let old_room = hero.room_id;
         hero.room_id = new_room;
-        state.add_event(SimulationEvent::UnitMoved {
-            tick: state.tick,
-            unit_id: hero.id,
-            from: old_room,
-            to: new_room,
-        })?;
-        trigger_traps(state, old_room, TrapTriggerType::OnExit, Some(hero.id))?;
-        trigger_traps(state, new_room, TrapTriggerType::OnEnter, Some(hero.id))?;
+        movements.push((hero.id, old_room, new_room));
+    }
+
+    for (unit_id, from, to) in movements {
+        push_event(
+            &mut state.events,
+            SimulationEvent::UnitMoved {
+                tick: state.tick,
+                unit_id,
+                from,
+                to,
+            },
+        )?;
+        trigger_traps(state, from, TrapTriggerType::OnExit, Some(unit_id))?;
+        trigger_traps(state, to, TrapTriggerType::OnEnter, Some(unit_id))?;
     }
     Ok(())
 }
@@ -218,12 +236,10 @@ fn process_attacks(state: &mut SimState) -> Result<(), SimError> {
                 .find(|h| h.room_id == room.id && h.hp > 0)
             {
                 let dmg = effective_damage(monster);
-                apply_damage(state, Some(monster.id), target, dmg)?;
+                apply_damage(&mut state.events, state.tick, Some(monster.id), target, dmg)?;
                 monster.attack_cooldown = monster.stats.attack_interval_ticks;
             }
         }
-        // Remove dead heroes after monster attacks
-        state.heroes.retain(|h| h.hp > 0);
     }
 
     // Hero attacks (including core)
@@ -247,56 +263,65 @@ fn process_attacks(state: &mut SimState) -> Result<(), SimError> {
         {
             if let Some(target) = room.monsters.iter_mut().find(|m| m.hp > 0) {
                 let dmg = effective_damage(hero);
-                apply_damage(state, Some(hero.id), target, dmg)?;
+                apply_damage(&mut state.events, state.tick, Some(hero.id), target, dmg)?;
                 hero.attack_cooldown = hero.stats.attack_interval_ticks;
             } else if room.id == state.dungeon.core_room_id {
                 let dmg = effective_damage(hero);
                 state.dungeon.core_hp -= dmg;
                 state.stats.total_damage_to_core += dmg;
-                state.add_event(SimulationEvent::CoreDamaged {
-                    tick: state.tick,
-                    amount: dmg,
-                    core_hp_after: state.dungeon.core_hp,
-                })?;
+                push_event(
+                    &mut state.events,
+                    SimulationEvent::CoreDamaged {
+                        tick: state.tick,
+                        amount: dmg,
+                        core_hp_after: state.dungeon.core_hp,
+                    },
+                )?;
                 hero.attack_cooldown = hero.stats.attack_interval_ticks;
             }
         }
-    }
-
-    // Remove dead monsters
-    for room in state.dungeon.rooms.iter_mut() {
-        room.monsters.retain(|m| m.hp > 0);
     }
 
     Ok(())
 }
 
 fn cleanup_dead(state: &mut SimState) {
-    state.heroes.retain(|unit| {
-        if unit.hp <= 0 {
+    let mut hero_idx = 0;
+    while hero_idx < state.heroes.len() {
+        if state.heroes[hero_idx].hp <= 0 {
+            let unit_id = state.heroes[hero_idx].id;
             state.stats.heroes_killed += 1;
-            let _ = state.add_event(SimulationEvent::UnitDied {
-                tick: state.tick,
-                unit_id: unit.id,
-            });
-            false
-        } else {
-            true
-        }
-    });
-    for room in state.dungeon.rooms.iter_mut() {
-        room.monsters.retain(|unit| {
-            if unit.hp <= 0 {
-                state.stats.monsters_killed += 1;
-                let _ = state.add_event(SimulationEvent::UnitDied {
+            let _ = push_event(
+                &mut state.events,
+                SimulationEvent::UnitDied {
                     tick: state.tick,
-                    unit_id: unit.id,
-                });
-                false
+                    unit_id,
+                },
+            );
+            state.heroes.remove(hero_idx);
+        } else {
+            hero_idx += 1;
+        }
+    }
+
+    for room in state.dungeon.rooms.iter_mut() {
+        let mut monster_idx = 0;
+        while monster_idx < room.monsters.len() {
+            if room.monsters[monster_idx].hp <= 0 {
+                let unit_id = room.monsters[monster_idx].id;
+                state.stats.monsters_killed += 1;
+                let _ = push_event(
+                    &mut state.events,
+                    SimulationEvent::UnitDied {
+                        tick: state.tick,
+                        unit_id,
+                    },
+                );
+                room.monsters.remove(monster_idx);
             } else {
-                true
+                monster_idx += 1;
             }
-        });
+        }
     }
 }
 
@@ -332,21 +357,27 @@ fn trigger_traps(
             }
             trap.charges_used += 1;
             trap.cooldown_remaining = trap.cooldown_ticks;
-            state.add_event(SimulationEvent::TrapTriggered {
-                tick: state.tick,
-                trap_id: trap.id,
-                room_id,
-            })?;
+            push_event(
+                &mut state.events,
+                SimulationEvent::TrapTriggered {
+                    tick: state.tick,
+                    trap_id: trap.id,
+                    room_id,
+                },
+            )?;
             if let Some(target_id) = target {
                 if let Some(hero) = state.heroes.iter_mut().find(|h| h.id == target_id) {
-                    apply_damage(state, None, hero, trap.damage)?;
+                    apply_damage(&mut state.events, state.tick, None, hero, trap.damage)?;
                     if let Some(status) = trap.status_on_hit.clone() {
                         hero.status_effects.push(status.clone());
-                        state.add_event(SimulationEvent::StatusApplied {
-                            tick: state.tick,
-                            target: hero.id,
-                            kind: status.kind,
-                        })?;
+                        push_event(
+                            &mut state.events,
+                            SimulationEvent::StatusApplied {
+                                tick: state.tick,
+                                target: hero.id,
+                                kind: status.kind,
+                            },
+                        )?;
                     }
                 }
             }
@@ -356,19 +387,23 @@ fn trigger_traps(
 }
 
 fn apply_damage(
-    state: &mut SimState,
+    events: &mut Vec<SimulationEvent>,
+    tick: u32,
     source: Option<UnitId>,
     target: &mut UnitInstance,
     raw_amount: i32,
 ) -> Result<(), SimError> {
     let damage = (raw_amount - effective_armor(target)).max(1);
     target.hp -= damage;
-    state.add_event(SimulationEvent::DamageApplied {
-        tick: state.tick,
-        source,
-        target: target.id,
-        amount: damage,
-    })?;
+    push_event(
+        events,
+        SimulationEvent::DamageApplied {
+            tick,
+            source,
+            target: target.id,
+            amount: damage,
+        },
+    )?;
     Ok(())
 }
 

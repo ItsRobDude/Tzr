@@ -1,0 +1,109 @@
+{
+  "outcome": "HeroesWin",
+  "final_dungeon": {
+    "rooms": [
+      {
+        "id": 0,
+        "traps": [],
+        "monsters": [],
+        "tags": []
+      },
+      {
+        "id": 1,
+        "traps": [],
+        "monsters": [],
+        "tags": []
+      },
+      {
+        "id": 2,
+        "traps": [],
+        "monsters": [],
+        "tags": []
+      }
+    ],
+    "edges": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    "core_room_id": 2,
+    "core_hp": 0
+  },
+  "final_heroes": [
+    {
+      "id": 0,
+      "faction": "hero",
+      "stats": {
+        "max_hp": 20,
+        "armor": 0,
+        "move_speed": 1.0,
+        "attack_damage": 5,
+        "attack_interval_ticks": 1,
+        "attack_range": 1
+      },
+      "hp": 20,
+      "room_id": 2,
+      "status_effects": [],
+      "ai_behavior": "aggressive",
+      "attack_cooldown": 1
+    }
+  ],
+  "stats": {
+    "ticks_run": 6,
+    "heroes_spawned": 1,
+    "heroes_killed": 0,
+    "monsters_killed": 0,
+    "total_damage_to_core": 15
+  },
+  "events": [
+    {
+      "UnitSpawned": {
+        "tick": 0,
+        "unit_id": 0,
+        "room_id": 0
+      }
+    },
+    {
+      "UnitMoved": {
+        "tick": 0,
+        "unit_id": 0,
+        "from": 0,
+        "to": 1
+      }
+    },
+    {
+      "UnitMoved": {
+        "tick": 1,
+        "unit_id": 0,
+        "from": 1,
+        "to": 2
+      }
+    },
+    {
+      "CoreDamaged": {
+        "tick": 1,
+        "amount": 5,
+        "core_hp_after": 10
+      }
+    },
+    {
+      "CoreDamaged": {
+        "tick": 3,
+        "amount": 5,
+        "core_hp_after": 5
+      }
+    },
+    {
+      "CoreDamaged": {
+        "tick": 5,
+        "amount": 5,
+        "core_hp_after": 0
+      }
+    }
+  ]
+}
