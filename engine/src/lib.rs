@@ -1,7 +1,7 @@
-pub mod model;
-pub mod sim;
-pub mod rng;
 pub mod error;
+pub mod model;
+pub mod rng;
+pub mod sim;
 
+pub use model::{DungeonState, SimulationResult, WaveConfig};
 pub use sim::simulate_wave;
-pub use model::{DungeonState, WaveConfig, SimulationResult};
