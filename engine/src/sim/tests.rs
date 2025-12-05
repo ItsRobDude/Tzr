@@ -61,6 +61,35 @@ fn heroes_can_destroy_core() {
 }
 
 #[test]
+fn simulations_can_timeout() {
+    let room0 = basic_room(0);
+    let room1 = basic_room(1);
+
+    let dungeon = DungeonState {
+        rooms: vec![room0.clone(), room1.clone()],
+        edges: vec![(room0.id, room1.id)],
+        core_room_id: room1.id,
+        core_hp: 1_000,
+    };
+
+    let wave = WaveConfig {
+        id: "timeout".into(),
+        entries: vec![HeroSpawn {
+            hero_template_id: "h1".into(),
+            count: 1,
+            spawn_room_id: room0.id,
+            delay_ticks: 0,
+        }],
+        modifiers: Vec::new(),
+    };
+
+    let result = simulate_wave(dungeon, wave, 42, 1).expect("simulation should succeed");
+    assert_eq!(SimulationOutcome::Timeout, result.outcome);
+    assert_eq!(1, result.stats.heroes_spawned);
+    assert_eq!(1, result.stats.ticks_run);
+}
+
+#[test]
 fn monsters_can_defend_core() {
     let mut core_room = basic_room(0);
     let monster_stats = UnitStats {
@@ -238,6 +267,61 @@ fn traps_apply_status_and_kill() {
     let result = simulate_wave(dungeon, wave, 3, 5).expect("simulation should succeed");
     assert_eq!(SimulationOutcome::DungeonWin, result.outcome);
     assert_eq!(1, result.stats.heroes_killed);
+}
+
+#[test]
+fn timed_traps_apply_status_and_damage() {
+    let mut room0 = basic_room(0);
+    room0.traps.push(TrapInstance {
+        id: TrapId(0),
+        trigger_type: TrapTriggerType::Timed,
+        cooldown_ticks: 1,
+        cooldown_remaining: 0,
+        max_charges: Some(2),
+        charges_used: 0,
+        damage: 5,
+        status_on_hit: Some(StatusInstance {
+            kind: StatusKind::Burn,
+            remaining_ticks: 2,
+            magnitude: 6.0,
+        }),
+        tags: Vec::new(),
+    });
+
+    let dungeon = DungeonState {
+        rooms: vec![room0.clone()],
+        edges: vec![],
+        core_room_id: room0.id,
+        core_hp: 50,
+    };
+
+    let wave = WaveConfig {
+        id: "timed-trap".into(),
+        entries: vec![HeroSpawn {
+            hero_template_id: "h1".into(),
+            count: 1,
+            spawn_room_id: room0.id,
+            delay_ticks: 0,
+        }],
+        modifiers: Vec::new(),
+    };
+
+    let result = simulate_wave(dungeon, wave, 5, 3).expect("simulation should succeed");
+
+    assert_eq!(SimulationOutcome::DungeonWin, result.outcome);
+    assert_eq!(1, result.stats.heroes_spawned);
+    assert_eq!(1, result.stats.heroes_killed);
+    assert!(result
+        .events
+        .iter()
+        .any(|e| matches!(e, crate::sim::events::SimulationEvent::TrapTriggered { trap_id, .. } if *trap_id == TrapId(0))));
+    assert!(result.events.iter().any(|e| matches!(
+        e,
+        crate::sim::events::SimulationEvent::StatusApplied {
+            kind: StatusKind::Burn,
+            ..
+        }
+    )));
 }
 
 #[test]

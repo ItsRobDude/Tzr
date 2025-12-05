@@ -54,7 +54,7 @@ impl SimState {
 
 fn push_event(events: &mut Vec<SimulationEvent>, event: SimulationEvent) -> Result<(), SimError> {
     if events.len() >= MAX_EVENTS {
-        return Err(SimError::EntityLimit);
+        return Err(SimError::EventLimit);
     }
     events.push(event);
     Ok(())
@@ -74,11 +74,13 @@ pub fn step_tick(
 
     tick_trap_cooldowns(state);
 
+    trigger_timed_traps(state)?;
+
     move_heroes(state)?;
 
     process_attacks(state)?;
 
-    cleanup_dead(state);
+    cleanup_dead(state)?;
 
     state.tick += 1;
     state.stats.ticks_run = state.tick;
@@ -239,16 +241,29 @@ fn process_attacks(state: &mut SimState) -> Result<(), SimError> {
             if is_stunned(monster) {
                 continue;
             }
-            if let Some(target) = state.heroes.iter_mut().find(|h| {
-                h.hp > 0
-                    && rooms_within_attack_range(
-                        room.id,
-                        h.room_id,
-                        monster.stats.attack_range,
-                        &state.dungeon.edges,
-                    )
-            }) {
+            let candidates: Vec<usize> = state
+                .heroes
+                .iter()
+                .enumerate()
+                .filter(|(_, h)| {
+                    h.hp > 0
+                        && rooms_within_attack_range(
+                            room.id,
+                            h.room_id,
+                            monster.stats.attack_range,
+                            &state.dungeon.edges,
+                        )
+                })
+                .map(|(idx, _)| idx)
+                .collect();
+
+            if let Some(choice_idx) = state.rng.choose_index(&candidates) {
+                let target_idx = candidates[choice_idx];
                 let dmg = effective_damage(monster);
+                let target = state
+                    .heroes
+                    .get_mut(target_idx)
+                    .expect("index from candidates must exist");
                 apply_damage(&mut state.events, state.tick, Some(monster.id), target, dmg)?;
                 monster.attack_cooldown = monster.stats.attack_interval_ticks;
             }
@@ -269,19 +284,33 @@ fn process_attacks(state: &mut SimState) -> Result<(), SimError> {
         }
 
         if state.dungeon.rooms.iter().any(|r| r.id == hero.room_id) {
-            if let Some(target) = state.dungeon.rooms.iter_mut().find_map(|target_room| {
+            let mut candidates = Vec::new();
+            for (room_idx, target_room) in state.dungeon.rooms.iter().enumerate() {
                 if !rooms_within_attack_range(
                     hero.room_id,
                     target_room.id,
                     hero.stats.attack_range,
                     &state.dungeon.edges,
                 ) {
-                    return None;
+                    continue;
                 }
 
-                target_room.monsters.iter_mut().find(|m| m.hp > 0)
-            }) {
+                for (monster_idx, monster) in target_room.monsters.iter().enumerate() {
+                    if monster.hp > 0 {
+                        candidates.push((room_idx, monster_idx));
+                    }
+                }
+            }
+
+            if let Some(choice_idx) = state.rng.choose_index(&candidates) {
+                let (room_idx, monster_idx) = candidates[choice_idx];
                 let dmg = effective_damage(hero);
+                let target = state
+                    .dungeon
+                    .rooms
+                    .get_mut(room_idx)
+                    .and_then(|room| room.monsters.get_mut(monster_idx))
+                    .expect("candidate monster must exist");
                 apply_damage(&mut state.events, state.tick, Some(hero.id), target, dmg)?;
                 hero.attack_cooldown = hero.stats.attack_interval_ticks;
             } else if rooms_within_attack_range(
@@ -321,19 +350,19 @@ fn rooms_within_attack_range(
             .unwrap_or(usize::MAX)
 }
 
-fn cleanup_dead(state: &mut SimState) {
+fn cleanup_dead(state: &mut SimState) -> Result<(), SimError> {
     let mut hero_idx = 0;
     while hero_idx < state.heroes.len() {
         if state.heroes[hero_idx].hp <= 0 {
             let unit_id = state.heroes[hero_idx].id;
             state.stats.heroes_killed += 1;
-            let _ = push_event(
+            push_event(
                 &mut state.events,
                 SimulationEvent::UnitDied {
                     tick: state.tick,
                     unit_id,
                 },
-            );
+            )?;
             state.heroes.remove(hero_idx);
         } else {
             hero_idx += 1;
@@ -346,19 +375,21 @@ fn cleanup_dead(state: &mut SimState) {
             if room.monsters[monster_idx].hp <= 0 {
                 let unit_id = room.monsters[monster_idx].id;
                 state.stats.monsters_killed += 1;
-                let _ = push_event(
+                push_event(
                     &mut state.events,
                     SimulationEvent::UnitDied {
                         tick: state.tick,
                         unit_id,
                     },
-                );
+                )?;
                 room.monsters.remove(monster_idx);
             } else {
                 monster_idx += 1;
             }
         }
     }
+
+    Ok(())
 }
 
 fn heroes_exhausted(state: &SimState, wave: &WaveConfig) -> bool {
@@ -418,6 +449,65 @@ fn trigger_traps(
             }
         }
     }
+    Ok(())
+}
+
+fn trigger_timed_traps(state: &mut SimState) -> Result<(), SimError> {
+    for room in state.dungeon.rooms.iter_mut() {
+        let heroes_in_room: Vec<UnitId> = state
+            .heroes
+            .iter()
+            .filter(|h| h.hp > 0 && h.room_id == room.id)
+            .map(|h| h.id)
+            .collect();
+
+        if heroes_in_room.is_empty() {
+            continue;
+        }
+
+        for trap in room.traps.iter_mut() {
+            if trap.trigger_type != TrapTriggerType::Timed {
+                continue;
+            }
+            if trap.cooldown_remaining > 0 {
+                continue;
+            }
+            if let Some(max_charges) = trap.max_charges {
+                if trap.charges_used >= max_charges {
+                    continue;
+                }
+            }
+
+            trap.charges_used += 1;
+            trap.cooldown_remaining = trap.cooldown_ticks;
+            push_event(
+                &mut state.events,
+                SimulationEvent::TrapTriggered {
+                    tick: state.tick,
+                    trap_id: trap.id,
+                    room_id: room.id,
+                },
+            )?;
+
+            for target_id in &heroes_in_room {
+                if let Some(hero) = state.heroes.iter_mut().find(|h| h.id == *target_id) {
+                    apply_damage(&mut state.events, state.tick, None, hero, trap.damage)?;
+                    if let Some(status) = trap.status_on_hit.clone() {
+                        hero.status_effects.push(status.clone());
+                        push_event(
+                            &mut state.events,
+                            SimulationEvent::StatusApplied {
+                                tick: state.tick,
+                                target: hero.id,
+                                kind: status.kind,
+                            },
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
