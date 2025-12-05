@@ -80,7 +80,7 @@ pub fn step_tick(
 
     process_attacks(state)?;
 
-    cleanup_dead(state);
+    cleanup_dead(state)?;
 
     state.tick += 1;
     state.stats.ticks_run = state.tick;
@@ -350,19 +350,19 @@ fn rooms_within_attack_range(
             .unwrap_or(usize::MAX)
 }
 
-fn cleanup_dead(state: &mut SimState) {
+fn cleanup_dead(state: &mut SimState) -> Result<(), SimError> {
     let mut hero_idx = 0;
     while hero_idx < state.heroes.len() {
         if state.heroes[hero_idx].hp <= 0 {
             let unit_id = state.heroes[hero_idx].id;
             state.stats.heroes_killed += 1;
-            let _ = push_event(
+            push_event(
                 &mut state.events,
                 SimulationEvent::UnitDied {
                     tick: state.tick,
                     unit_id,
                 },
-            );
+            )?;
             state.heroes.remove(hero_idx);
         } else {
             hero_idx += 1;
@@ -375,19 +375,21 @@ fn cleanup_dead(state: &mut SimState) {
             if room.monsters[monster_idx].hp <= 0 {
                 let unit_id = room.monsters[monster_idx].id;
                 state.stats.monsters_killed += 1;
-                let _ = push_event(
+                push_event(
                     &mut state.events,
                     SimulationEvent::UnitDied {
                         tick: state.tick,
                         unit_id,
                     },
-                );
+                )?;
                 room.monsters.remove(monster_idx);
             } else {
                 monster_idx += 1;
             }
         }
     }
+
+    Ok(())
 }
 
 fn heroes_exhausted(state: &SimState, wave: &WaveConfig) -> bool {

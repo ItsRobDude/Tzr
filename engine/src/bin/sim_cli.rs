@@ -3,9 +3,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use engine::model::SimulationOutcome;
-use engine::sim::MAX_TICKS;
 use engine::sim::events::SimulationEvent;
-use engine::{DungeonState, WaveConfig, simulate_wave};
+use engine::sim::{MAX_EVENTS, MAX_TICKS};
+use engine::{DungeonState, ENGINE_VERSION, WaveConfig, simulate_wave};
 
 struct RunArgs {
     dungeon: PathBuf,
@@ -138,6 +138,7 @@ fn run_once(args: RunArgs) -> Result<(), Box<dyn std::error::Error>> {
         &result.outcome,
         &result.final_dungeon.core_hp,
         &result.stats,
+        result.events.len(),
     );
 
     if !args.summary_only {
@@ -212,7 +213,9 @@ fn print_summary(
     outcome: &SimulationOutcome,
     core_hp: &i32,
     stats: &engine::model::SimulationStats,
+    event_count: usize,
 ) {
+    println!("Engine version: {ENGINE_VERSION}");
     println!("Seed: {seed}");
     println!("Outcome: {:?}", outcome);
     println!("Core HP after wave: {core_hp}");
@@ -221,6 +224,7 @@ fn print_summary(
     println!("Heroes killed: {}", stats.heroes_killed);
     println!("Monsters killed: {}", stats.monsters_killed);
     println!("Total damage to core: {}", stats.total_damage_to_core);
+    println!("Events emitted: {event_count} / {MAX_EVENTS}");
 }
 
 fn format_event(event: &SimulationEvent) -> String {

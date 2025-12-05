@@ -1,4 +1,4 @@
-use engine::{simulate_wave, DungeonState, WaveConfig};
+use engine::{simulate_wave, DungeonState, WaveConfig, ENGINE_VERSION};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -17,4 +17,9 @@ pub fn simulate_wave_wasm(
         .map_err(|err| JsValue::from_str(&err.to_string()))
         .and_then(|result| serde_wasm_bindgen::to_value(&result)
             .map_err(|err| JsValue::from_str(&format!("failed to serialize result: {err}"))))
+}
+
+#[wasm_bindgen]
+pub fn engine_version_wasm() -> String {
+    ENGINE_VERSION.to_string()
 }

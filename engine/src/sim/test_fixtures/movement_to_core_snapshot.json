@@ -105,5 +105,6 @@
         "core_hp_after": 0
       }
     }
-  ]
+  ],
+  "engine_version": "0.1.0"
 }
