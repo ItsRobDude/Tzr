@@ -1,5 +1,6 @@
+// client/src/replay/load.test.ts
 import assert from 'node:assert/strict';
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 
 import * as storage from './storage';
 import * as wasmEngine from '../engine/wasmEngine';
@@ -51,19 +52,64 @@ function makeReplay(engineVersion: string): StoredRunReplay {
   };
 }
 
+beforeEach(() => {
+  mock.restoreAll();
+  mock.method(wasmEngine, 'getEngineVersion', async () => '1.2.3');
+});
+
 afterEach(() => {
   mock.restoreAll();
 });
 
 describe('loadLastRunReplay', () => {
+  it('returns kind=none when there is no stored replay', async () => {
+    mock.method(storage, 'loadLastRunReplayRaw', () => null);
+    const clearMock = mock.method(storage, 'clearLastRunReplay', () => undefined);
+
+    const result = await loadLastRunReplay();
+
+    assert.deepStrictEqual(result, { kind: 'none' });
+    assert.equal(clearMock.mock.callCount(), 0);
+  });
+
+  it('treats missing engineVersion as incompatible and clears replay', async () => {
+    mock.method(storage, 'loadLastRunReplayRaw', () => ({
+      schemaVersion: 1,
+      engineVersion: undefined,
+    } as any));
+    const clearMock = mock.method(storage, 'clearLastRunReplay', () => undefined);
+
+    const result = await loadLastRunReplay();
+
+    assert.equal(result.kind, 'incompatible');
+    if (result.kind === 'incompatible') {
+      assert.equal(result.savedVersion, '');
+      assert.equal(result.currentVersion, '1.2.3');
+    }
+    assert.equal(clearMock.mock.callCount(), 1);
+  });
+
+  it('treats malformed engineVersion as incompatible and clears replay', async () => {
+    mock.method(storage, 'loadLastRunReplayRaw', () => ({
+      schemaVersion: 1,
+      engineVersion: 'not-a-version',
+    } as any));
+    const clearMock = mock.method(storage, 'clearLastRunReplay', () => undefined);
+
+    const result = await loadLastRunReplay();
+
+    assert.equal(result.kind, 'incompatible');
+    if (result.kind === 'incompatible') {
+      assert.equal(result.savedVersion, 'not-a-version');
+      assert.equal(result.currentVersion, '1.2.3');
+    }
+    assert.equal(clearMock.mock.callCount(), 1);
+  });
+
   it('clears incompatible replays', async () => {
     const saved = makeReplay('1.0.0');
-    let cleared = false;
-
     mock.method(storage, 'loadLastRunReplayRaw', () => saved);
-    mock.method(storage, 'clearLastRunReplay', () => {
-      cleared = true;
-    });
+    const clearMock = mock.method(storage, 'clearLastRunReplay', () => undefined);
     mock.method(wasmEngine, 'getEngineVersion', async () => '2.1.0');
 
     const result = await loadLastRunReplay();
@@ -73,17 +119,13 @@ describe('loadLastRunReplay', () => {
       savedVersion: '1.0.0',
       currentVersion: '2.1.0',
     });
-    assert.equal(cleared, true);
+    assert.equal(clearMock.mock.callCount(), 1);
   });
 
   it('returns ok when compatible', async () => {
     const saved = makeReplay('1.2.0');
-    let cleared = false;
-
     mock.method(storage, 'loadLastRunReplayRaw', () => saved);
-    mock.method(storage, 'clearLastRunReplay', () => {
-      cleared = true;
-    });
+    const clearMock = mock.method(storage, 'clearLastRunReplay', () => undefined);
     mock.method(wasmEngine, 'getEngineVersion', async () => '1.2.3');
 
     const result = await loadLastRunReplay();
@@ -92,12 +134,6 @@ describe('loadLastRunReplay', () => {
     if (result.kind === 'ok') {
       assert.equal(result.replay, saved);
     }
-    assert.equal(cleared, false);
-  });
-
-  it('returns none when no replay saved', async () => {
-    mock.method(storage, 'loadLastRunReplayRaw', () => null);
-    const result = await loadLastRunReplay();
-    assert.deepStrictEqual(result, { kind: 'none' });
+    assert.equal(clearMock.mock.callCount(), 0);
   });
 });
