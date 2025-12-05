@@ -3,6 +3,7 @@ pub mod pathfinding;
 pub mod test_fixtures;
 pub mod tick;
 
+use crate::ENGINE_VERSION;
 use crate::error::SimError;
 use crate::model::{DungeonState, SimulationOutcome, SimulationResult, WaveConfig};
 use tick::{SimState, step_tick};
@@ -39,6 +40,7 @@ pub fn simulate_wave(
         final_heroes: state.heroes,
         stats: state.stats,
         events: state.events,
+        engine_version: ENGINE_VERSION.to_string(),
     })
 }
 

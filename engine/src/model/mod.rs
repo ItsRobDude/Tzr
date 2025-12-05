@@ -48,4 +48,5 @@ pub struct SimulationResult {
     pub final_heroes: Vec<UnitInstance>,
     pub stats: SimulationStats,
     pub events: Vec<crate::sim::events::SimulationEvent>,
+    pub engine_version: String,
 }
